@@ -261,8 +261,17 @@ config MMU
 	  Select if you want MMU-based virtualised addressing space
 	  support by paged memory management. If unsure, say 'Y'.
 
+config PAGE_OFFSET_BOOL
+	bool "Set custom page offset address"
+	help
+	  This option allows you to set the kernel virtual address at which
+	  the kernel will map low memory.  This can be useful in optimizing
+	  the virtual memory layout of the system.
+
+	  Say N here unless you know what you are doing.
+
 config PAGE_OFFSET
-	hex
+	hex "Custom kernel base address" if PAGE_OFFSET_BOOL
 	default 0x80000000 if !MMU && RISCV_M_MODE
 	default 0x80200000 if !MMU
 	default 0xc0000000 if 32BIT
