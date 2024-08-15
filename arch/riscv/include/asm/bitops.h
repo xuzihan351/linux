@@ -230,18 +230,7 @@ legacy:
  */
 static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned int res;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	res = *addr;
-	*addr = res | mask;
-	raw_local_irq_restore(flags);
-
-	return (res & mask) != 0;
+	return __test_and_op_bit(or, __NOP, nr, addr);
 }
 
 /**
@@ -253,18 +242,7 @@ static inline int test_and_set_bit(int nr, volatile unsigned long *addr)
  */
 static inline int test_and_clear_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned int res;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	res = *addr;
-	*addr = res & ~mask;
-	raw_local_irq_restore(flags);
-
-	return (res & mask) != 0;
+	return __test_and_op_bit(and, __NOT, nr, addr);
 }
 
 /**
@@ -277,18 +255,7 @@ static inline int test_and_clear_bit(int nr, volatile unsigned long *addr)
  */
 static inline int test_and_change_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned int res;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	res = *addr;
-	*addr = res ^ mask;
-	raw_local_irq_restore(flags);
-
-	return (res & mask) != 0;
+	return __test_and_op_bit(xor, __NOP, nr, addr);
 }
 
 /**
@@ -305,14 +272,7 @@ static inline int test_and_change_bit(int nr, volatile unsigned long *addr)
  */
 static inline void set_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	*addr |= mask;
-	raw_local_irq_restore(flags);
+	__op_bit(or, __NOP, nr, addr);
 }
 
 /**
@@ -326,14 +286,7 @@ static inline void set_bit(int nr, volatile unsigned long *addr)
  */
 static inline void clear_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	*addr &= ~mask;
-	raw_local_irq_restore(flags);
+	__op_bit(and, __NOT, nr, addr);
 }
 
 /**
@@ -347,14 +300,7 @@ static inline void clear_bit(int nr, volatile unsigned long *addr)
  */
 static inline void change_bit(int nr, volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned long mask = BIT_MASK(nr);
-
-	addr += BIT_WORD(nr);
-
-	raw_local_irq_save(flags);
-	*addr ^= mask;
-	raw_local_irq_restore(flags);
+	__op_bit(xor, __NOP, nr, addr);
 }
 
 /**
@@ -368,7 +314,7 @@ static inline void change_bit(int nr, volatile unsigned long *addr)
 static inline int test_and_set_bit_lock(
 	unsigned long nr, volatile unsigned long *addr)
 {
-	return test_and_set_bit(nr, addr);
+	return __test_and_op_bit_ord(or, __NOP, nr, addr, .aq);
 }
 
 /**
@@ -381,7 +327,7 @@ static inline int test_and_set_bit_lock(
 static inline void clear_bit_unlock(
 	unsigned long nr, volatile unsigned long *addr)
 {
-	clear_bit(nr, addr);
+	__op_bit_ord(and, __NOT, nr, addr, .rl);
 }
 
 /**
@@ -408,14 +354,12 @@ static inline void __clear_bit_unlock(
 static inline bool xor_unlock_is_negative_byte(unsigned long mask,
 		volatile unsigned long *addr)
 {
-	unsigned long flags;
-	unsigned int res;
-
-	raw_local_irq_save(flags);
-	res = *addr;
-	*addr = res ^ mask;
-	raw_local_irq_restore(flags);
-
+	unsigned long res;
+	__asm__ __volatile__ (
+		__AMO(xor) ".rl %0, %2, %1"
+		: "=r" (res), "+A" (*addr)
+		: "r" (__NOP(mask))
+		: "memory");
 	return (res & BIT(7)) != 0;
 }
 

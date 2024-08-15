@@ -7,7 +7,6 @@
 #define _ASM_RISCV_CMPXCHG_H
 
 #include <linux/bug.h>
-#include <linux/irqflags.h>
 
 #include <asm/fence.h>
 
@@ -37,17 +36,14 @@
 })
 
 #define __arch_xchg(sfx, prepend, append, r, p, n)			\
-({	ulong flags;							\
-	raw_local_irq_save(flags);					\
+({									\
 	__asm__ __volatile__ (						\
 		prepend							\
-		"	lw %0, %1\n"					\
-		"	sw %2, %1\n"					\
+		"	amoswap" sfx " %0, %2, %1\n"			\
 		append							\
 		: "=r" (r), "+A" (*(p))					\
 		: "r" (n)						\
 		: "memory");						\
-	raw_local_irq_restore(flags);					\
 })
 
 #define _arch_xchg(ptr, new, sc_sfx, swap_sfx, prepend,			\
@@ -118,24 +114,22 @@
 	ulong __oldx = (ulong)(o) << __s;				\
 	ulong __retx;							\
 	ulong __rc;							\
-	ulong __flags;							\
 									\
-	raw_local_irq_save(__flags);					\
 	__asm__ __volatile__ (						\
 		prepend							\
-		"	lw   %0, %2\n"					\
+		"0:	lr.w %0, %2\n"					\
 		"	and  %1, %0, %z5\n"				\
 		"	bne  %1, %z3, 1f\n"				\
 		"	and  %1, %0, %z6\n"				\
 		"	or   %1, %1, %z4\n"				\
-		"	sw   %1, %2\n"					\
+		"	sc.w" sc_sfx " %1, %1, %2\n"			\
+		"	bnez %1, 0b\n"					\
 		append							\
 		"1:\n"							\
 		: "=&r" (__retx), "=&r" (__rc), "+A" (*(__ptr32b))	\
 		: "rJ" ((long)__oldx), "rJ" (__newx),			\
 		  "rJ" (__mask), "rJ" (~__mask)				\
 		: "memory");						\
-	raw_local_irq_restore(__flags);					\
 									\
 	r = (__typeof__(*(p)))((__retx & __mask) >> __s);		\
 })
@@ -143,20 +137,18 @@
 #define __arch_cmpxchg(lr_sfx, sc_sfx, prepend, append, r, p, co, o, n)	\
 ({									\
 	register unsigned int __rc;					\
-	ulong __flags;							\
 									\
-	raw_local_irq_save(__flags);					\
 	__asm__ __volatile__ (						\
 		prepend							\
-		"0:	lw   %0, %2\n"					\
+		"0:	lr" lr_sfx " %0, %2\n"				\
 		"	bne  %0, %z3, 1f\n"				\
-		"	sw   %z4, %2\n"					\
+		"	sc" sc_sfx " %1, %z4, %2\n"			\
+		"	bnez %1, 0b\n"					\
 		append							\
 		"1:\n"							\
 		: "=&r" (r), "=&r" (__rc), "+A" (*(p))			\
 		: "rJ" (co o), "rJ" (n)					\
 		: "memory");						\
-	raw_local_irq_restore(__flags);					\
 })
 
 #define _arch_cmpxchg(ptr, old, new, sc_sfx, prepend, append)		\
