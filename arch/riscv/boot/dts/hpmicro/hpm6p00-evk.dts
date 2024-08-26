@@ -1,0 +1,104 @@
+/dts-v1/;
+
+/ {
+	#address-cells = <0x01>;
+	#size-cells = <0x01>;
+	compatible = "hpmicro,hpm6360";
+	model = "HPMicro HPM6360 Evaluate Kit";
+
+	aliases {
+		serial0 = &uart0;
+	};
+
+	chosen {
+		bootargs = "earlycon=sbi console=hvc0 ignore_loglevel rootwait root=/dev/mtdblock0";
+		stdout-path = "hvc0";
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x40000000 0x02000000>;
+	};
+
+	cpus {
+		#address-cells = <0x01>;
+		#size-cells = <0x00>;
+		timebase-frequency = <24000000>;
+
+		cpu@0 {
+			phandle = <0x01>;
+			device_type = "cpu";
+			reg = <0x00>;
+			status = "okay";
+			compatible = "riscv";
+			riscv,isa = "rv32imafdcp";
+			riscv,isa-base = "rv32i";
+			riscv,isa-extensions = "i", "m", "a", "f", "d", "c", "zicsr",
+					       "zifencei", "zihpm";
+			mmu-type = "riscv,none";
+
+			cpu0_intc: interrupt-controller {
+				#interrupt-cells = <0x01>;
+				interrupt-controller;
+				compatible = "riscv,cpu-intc";
+			};
+		};
+	};
+
+	soc {
+		#address-cells = <0x01>;
+		#size-cells = <0x01>;
+		compatible = "simple-bus";
+		ranges;
+		interrupt-parent = <&plic>;
+
+		clint: clint@2000000 {
+			compatible = "starfive,jh7100-clint", "sifive,clint0";
+			reg = <0x2000000 0x10000>;
+			interrupts-extended = <&cpu0_intc 3>, <&cpu0_intc 7>;
+		};
+		rom@80400000 {
+			compatible = "mtd-rom";
+			reg = <0x80400000 0xC00000>;
+			bank-width = <1>;
+		};
+
+		uart0: uart0@f0040000 {
+			compatible = "hpmicro,hpm6360-uart";
+			reg = <0xf0040000 0x40>;
+			clock-frequency = <24000000>;
+			status = "okay";
+			interrupts = <27>;
+		};
+		uart3: uart3@f004c000 {
+			compatible = "hpmicro,hpm6360-uart";
+			reg = <0xf004c000 0x40>;
+			clock-frequency = <24000000>;
+			status = "okay";
+			interrupts = <30>;
+		};
+		plic: interrupt-controller@e4000000 {
+			compatible = "hpmicro,hpmicro-plic", "sifive,plic-1.0.0";
+			reg = <0xe4000000 0x4000000>;
+			#address-cells = <0>;
+			#interrupt-cells = <1>;
+			interrupt-controller;
+			interrupts-extended = <&cpu0_intc 11>, <&cpu0_intc 9>;
+			riscv,ndev = <76>;
+		};
+		gpio0: gpio-controller@f00d0000 {
+			#interrupt-cells = <1>;
+			#gpio-cells = <2>;
+			compatible = "hpmicro,gpio";
+			reg = <0xF00D0000 0x4000>;
+			interrupt-controller;
+			interrupts = <1>, <2>, <3>, <4>, <5>, <6>, <7>,
+				     <8>, <9>;
+			gpio-controller;
+			ngpios = <32>;
+			n-ports = <9>;
+			status = "okay";
+		};
+	};
+};
+
